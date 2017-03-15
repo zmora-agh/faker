@@ -14,12 +14,9 @@ module Faker.Utils
 (
 -- * Data types
   Faker(..)
-, Locale(..)
-, FakerConfig(..)
 
 -- * Helper functions for other 'Faker' modules
 , runFaker
-, runFakerWith
 , randomValue
 , randomInt
 , replaceSymbols
@@ -33,23 +30,11 @@ import Data.List.Split (splitOn)
 import Data.List (intercalate)
 import Control.Monad.State
 import Control.Applicative
---import Paths_faker
+import Paths_faker
 
--- | Value represent locales
-data Locale = US      -- ^ Default locale, US
-            | Russian -- ^ Russian locale
-  deriving (Show)
-
--- | Config for faker functions
-data FakerConfig = FakerConfig {
-                     fakerLocale :: Locale -- ^ Contains locale for 'Faker' functions
-                   } deriving (Show)
-
--- | Fake data storage, contains default and requested locales data and
--- stdGen
+-- | Fake data storage, contains locale data and stdGen
 data FakerData = FakerData {
-    defaultLocaleData :: SimpleGiml, -- ^ Fake data for default locale (for fallbacks)
-    localeData :: SimpleGiml,        -- ^ Fake data for locale stored in 'FakerConfig' provided (same as 'defaultLocaleData' if none)
+    localeData :: SimpleGiml,        -- ^ Fake data for locale
     stdGen :: StdGen                 -- ^ Generator for fetching random values from data
   }
 
@@ -57,36 +42,18 @@ data FakerData = FakerData {
 newtype Faker a = Faker (State FakerData a)
   deriving (Functor, Monad, Applicative, MonadState FakerData)
 
-localeFileName :: Locale -> String
-localeFileName Russian = "ru"
-localeFileName _ = "en"
-
-loadGimlData :: FilePath -> IO SimpleGiml
-loadGimlData fname = do
-    -- filePath <- getDataFileName "data/en.giml"
-    contents <- parseFile fname
+loadGimlData :: IO SimpleGiml
+loadGimlData = do
+    filePath <- getDataFileName "data/en.giml"
+    contents <- parseFile filePath
     return $ simplifyGiml contents
-
--- | Function for run 'Faker' functions with 'FakerConfig' (currently with
--- specified locale in it)
-runFakerWith :: FakerConfig -> Faker a -> IO a
-runFakerWith config (Faker action) = do
-  defaultLocaleData <- loadGimlData ("../data/" ++ localeFileName US ++ ".giml")
-  localeData <- loadGimlData ("../data/" ++ localeFileName (fakerLocale config) ++ ".giml")
-  stdGen <- newStdGen
-  let fakerData = FakerData { defaultLocaleData = defaultLocaleData
-                            , localeData = localeData
-                            , stdGen = stdGen }
-
-  return $ evalState action fakerData
 
 -- | Function for run 'Faker' functions with default 'US' locale
 runFaker :: Faker a -> IO a
 runFaker (Faker action) = do
-  defaultLocaleData <- loadGimlData ("../data/" ++ localeFileName US ++ ".giml")
+  defaultLocaleData <- loadGimlData
   stdGen <- newStdGen
-  let fakerData = FakerData { defaultLocaleData = defaultLocaleData
-                            , localeData = defaultLocaleData
+  let fakerData = FakerData { localeData = defaultLocaleData
                             , stdGen = stdGen }
 
   return $ evalState action fakerData
@@ -94,12 +61,9 @@ runFaker (Faker action) = do
 readFromGiml :: String -> Faker [String]
 readFromGiml thing = do
   d <- gets localeData
-  defaultData <- gets defaultLocaleData
   case fetch d thing of
     Just x -> return $ val2List x
-    Nothing -> case fetch defaultData thing of
-                 Just x -> return $ val2List x
-                 Nothing -> error "no element and sucky error handling"
+    Nothing -> error "no element and sucky error handling"
 
 -- | Internal function, used in other 'Faker' modules
 -- to fetch specific value from data storage by namespace and
