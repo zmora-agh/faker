@@ -1,4 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-|
 Module        : Faker.Utils
 Description   : Module with helper functions for all other 'Faker' modules
@@ -16,31 +15,36 @@ module Faker.Utils
   Faker(..)
 
 -- * Helper functions for other 'Faker' modules
+, toGen
 , runFaker
-, randomValue
 , randomInt
+, randomValue
 , replaceSymbols
 , evalRegex
 )
 where
 
-import System.Random (newStdGen, StdGen, randomR)
+import Test.QuickCheck
+
 import Gimlh
 import Data.List.Split (splitOn)
 import Data.List (intercalate)
-import Control.Monad.State
-import Control.Applicative
+import System.IO.Unsafe
+
 import Paths_faker
 
--- | Fake data storage, contains locale data and stdGen
-data FakerData = FakerData {
-    localeData :: SimpleGiml,        -- ^ Fake data for locale
-    stdGen :: StdGen                 -- ^ Generator for fetching random values from data
-  }
-
 -- | Stateful type for faker values
-newtype Faker a = Faker (State FakerData a)
-  deriving (Functor, Monad, Applicative, MonadState FakerData)
+newtype Faker a = Faker { unFaker :: SimpleGiml -> Gen a }
+
+instance Functor Faker where
+  fmap f (Faker r) = Faker $ \d -> fmap f (r d)
+
+instance Applicative Faker where
+  pure a = Faker $ const (pure a)
+  Faker f <*> Faker a = Faker $ \d -> f d <*> a d
+
+instance Monad Faker where
+  Faker a >>= b = Faker $ \d -> a d >>= ((`unFaker` d) . b)
 
 loadGimlData :: IO SimpleGiml
 loadGimlData = do
@@ -48,22 +52,22 @@ loadGimlData = do
     contents <- parseFile filePath
     return $ simplifyGiml contents
 
--- | Function for run 'Faker' functions with default 'US' locale
+-- | Function for run 'Faker' functions
 runFaker :: Faker a -> IO a
-runFaker (Faker action) = do
-  defaultLocaleData <- loadGimlData
-  stdGen <- newStdGen
-  let fakerData = FakerData { localeData = defaultLocaleData
-                            , stdGen = stdGen }
-
-  return $ evalState action fakerData
+runFaker f = do
+  d <- loadGimlData
+  generate $ unFaker f d
+  
+toGen :: Faker a -> Gen a
+toGen f = unFaker f (unsafePerformIO loadGimlData)
 
 readFromGiml :: String -> Faker [String]
-readFromGiml thing = do
-  d <- gets localeData
-  case fetch d thing of
-    Just x -> return $ val2List x
-    Nothing -> error "no element and sucky error handling"
+readFromGiml thing = Faker $ \d -> case fetch d thing of
+  Just x -> return $ val2List x
+  Nothing -> error "no element and sucky error handling"
+
+randomInt :: (Int, Int) -> Faker Int
+randomInt range = Faker $ const (choose range)
 
 -- | Internal function, used in other 'Faker' modules
 -- to fetch specific value from data storage by namespace and
@@ -73,24 +77,8 @@ readFromGiml thing = do
 -- "John"
 randomValue :: String -> String -> Faker String
 randomValue namespace valType = do
-    valList <- readFromGiml (namespace ++ "$" ++ valType)
-    ind <- randomInt (0, length valList - 1)
-    return $ valList !! ind
-
--- | Internal function, used in other 'Faker' modules
--- to get random number inside provided bounds:
---
--- >>> runFaker $ randomInt (1,4)
--- 3
-randomInt :: (Int, Int) -> Faker Int
-randomInt bounds = do
-  state <- get
-
-  let (int, newGen) = randomR bounds (stdGen state)
-
-  put (state { stdGen = newGen })
-
-  return int
+  valList <- readFromGiml (namespace ++ "$" ++ valType)
+  (valList !!) <$> randomInt (0, length valList - 1)
 
 -- | Internal function, used in other 'Faker' modules
 -- to replace special chars '#' with random numbers
@@ -101,9 +89,9 @@ replaceSymbols :: String -> Faker String
 replaceSymbols [] = return ""
 replaceSymbols (x:xs) = do
     restOfLine <- replaceSymbols xs
-    randInt <- randomInt (0,9)
+    randInt <- randomInt (0, 9)
     return $ case x of
-               '#' -> show randInt ++ restOfLine
+               '#' -> show (randInt :: Int) ++ restOfLine
                _   -> x : restOfLine
 
 -- | Internal function, used in other 'Faker' modules
