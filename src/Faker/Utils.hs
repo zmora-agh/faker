@@ -31,7 +31,7 @@ import Data.List.Split (splitOn)
 import Data.List (intercalate)
 import System.IO.Unsafe
 
-import Paths_faker
+-- import Paths_faker
 
 -- | Stateful type for faker values
 newtype Faker a = Faker { unFaker :: SimpleGiml -> Gen a }
@@ -48,8 +48,7 @@ instance Monad Faker where
 
 loadGimlData :: IO SimpleGiml
 loadGimlData = do
-    filePath <- getDataFileName "data/en.giml"
-    contents <- parseFile filePath
+    contents <- parseFile "../data/en.giml"
     return $ simplifyGiml contents
 
 -- | Function for run 'Faker' functions
