@@ -30,8 +30,9 @@ import Gimlh
 import Data.List.Split (splitOn)
 import Data.List (intercalate)
 import System.IO.Unsafe
+import Control.Exception
 
--- import Paths_faker
+import Paths_faker
 
 -- | Stateful type for faker values
 newtype Faker a = Faker { unFaker :: SimpleGiml -> Gen a }
@@ -48,7 +49,10 @@ instance Monad Faker where
 
 loadGimlData :: IO SimpleGiml
 loadGimlData = do
-    contents <- parseFile "../data/en.giml"
+    filePath <- getDataFileName "data/en.giml"
+    let handler :: IOException -> IO Giml
+        handler _ = parseFile "../data/en.giml"
+    contents <- parseFile filePath `catch` handler
     return $ simplifyGiml contents
 
 -- | Function for run 'Faker' functions
