@@ -42,6 +42,7 @@ Library
     , Faker.Business
     , Faker.Lorem
     , Faker.Utils
+    , Faker.Avatar
 
   Other-Modules: Paths_faker
 
