@@ -20,9 +20,9 @@ import Faker.Utils
 import qualified Faker.Lorem as L
 
 -- | Returns random avatar url from robohash.org with 300x300 size,
--- i.e. "http://robohash.org/suntbestia.png?size=300x300"
+-- i.e. "https://robohash.org/suntbestia.png?size=300x300"
 image :: Faker String
 image = do
     ws <- randomInt(2,5) >>= L.words
     let slug = foldl1 (++) ws
-    return $ "http://robohash.org/" ++ slug ++ ".png?size=300x300"
+    return $ "https://robohash.org/" ++ slug ++ ".png?size=300x300"
